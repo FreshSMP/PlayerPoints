@@ -170,18 +170,23 @@ public final class PointsUtils {
      * @return a list of all accounts + online players excluding vanished players
      */
     public static List<String> getPlayerTabComplete(CommandContext context, boolean showAllPlayers, boolean hideSelf) {
-        Set<String> usernames = Bukkit.getOnlinePlayers().stream()
+        List<? extends Player> snapshot = new ArrayList<>(Bukkit.getOnlinePlayers());
+
+        Set<String> usernames = snapshot.stream()
                 .filter(PointsUtils::isVisible)
-                .filter(x -> !hideSelf || !Objects.equals(x, context.getSender()))
+                .filter(p -> !hideSelf || !Objects.equals(p, context.getSender()))
                 .map(Player::getName)
                 .collect(Collectors.toSet());
 
-        if (showAllPlayers)
-            usernames.addAll(context.getRosePlugin().getManager(DataManager.class).getAccountToNameMap().values());
+        if (showAllPlayers) {
+            usernames.addAll(context.getRosePlugin()
+                    .getManager(DataManager.class)
+                    .getAccountToNameMap()
+                    .values());
+        }
 
         return new ArrayList<>(usernames);
     }
-
     public static boolean isVisible(Player player) {
         return player.getMetadata("vanished").stream().noneMatch(MetadataValue::asBoolean);
     }
