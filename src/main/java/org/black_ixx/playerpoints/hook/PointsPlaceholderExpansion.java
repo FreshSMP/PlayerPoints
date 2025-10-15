@@ -9,6 +9,7 @@ import org.black_ixx.playerpoints.manager.LocaleManager;
 import org.black_ixx.playerpoints.models.SortedPlayer;
 import org.black_ixx.playerpoints.util.PointsUtils;
 import org.bukkit.OfflinePlayer;
+import org.jetbrains.annotations.NotNull;
 
 public class PointsPlaceholderExpansion extends PlaceholderExpansion {
 
@@ -25,7 +26,7 @@ public class PointsPlaceholderExpansion extends PlaceholderExpansion {
     }
 
     @Override
-    public String onRequest(OfflinePlayer player, String placeholder) {
+    public String onRequest(OfflinePlayer player, @NotNull String placeholder) {
         if (player != null) {
             switch (placeholder.toLowerCase()) {
                 case "points":
@@ -94,17 +95,17 @@ public class PointsPlaceholderExpansion extends PlaceholderExpansion {
     }
 
     @Override
-    public String getIdentifier() {
+    public @NotNull String getIdentifier() {
         return this.playerPoints.getDescription().getName().toLowerCase();
     }
 
     @Override
-    public String getAuthor() {
+    public @NotNull String getAuthor() {
         return this.playerPoints.getDescription().getAuthors().get(0);
     }
 
     @Override
-    public String getVersion() {
+    public @NotNull String getVersion() {
         return this.playerPoints.getDescription().getVersion();
     }
 
