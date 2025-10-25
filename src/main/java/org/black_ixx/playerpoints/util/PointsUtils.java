@@ -188,6 +188,7 @@ public final class PointsUtils {
 
         return new ArrayList<>(usernames);
     }
+
     public static boolean isVisible(Player player) {
         return player.getMetadata("vanished").stream().noneMatch(MetadataValue::asBoolean);
     }
