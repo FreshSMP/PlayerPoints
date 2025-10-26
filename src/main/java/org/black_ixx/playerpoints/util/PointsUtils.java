@@ -6,7 +6,6 @@ import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
 import java.text.NumberFormat;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
@@ -23,7 +22,6 @@ import org.black_ixx.playerpoints.manager.DataManager;
 import org.black_ixx.playerpoints.manager.LocaleManager;
 import org.black_ixx.playerpoints.models.Tuple;
 import org.bukkit.Bukkit;
-import org.bukkit.OfflinePlayer;
 import org.bukkit.entity.Player;
 import org.bukkit.metadata.MetadataValue;
 
@@ -105,7 +103,6 @@ public final class PointsUtils {
      * @param name The name of the player
      * @param callback A callback to run with a tuple of the player's UUID and name, or null if not found
      */
-    @SuppressWarnings("deprecation")
     public static void getPlayerByName(String name, Consumer<Tuple<UUID, String>> callback) {
         Player player = Bukkit.getPlayerExact(name);
         if (player != null) {
@@ -114,20 +111,11 @@ public final class PointsUtils {
         }
 
         PlayerPoints plugin = PlayerPoints.getInstance();
-        DataManager dataManager = plugin.getManager(DataManager.class);
         plugin.getScheduler().runTaskAsync(() -> {
             UUID uuid = plugin.getManager(DataManager.class).lookupCachedUUID(name);
             if (uuid != null) {
                 Tuple<UUID, String> tuple = new Tuple<>(uuid, name);
                 plugin.getScheduler().runTask(() -> callback.accept(tuple));
-                return;
-            }
-
-            OfflinePlayer offlinePlayer = Bukkit.getOfflinePlayer(name);
-            if (offlinePlayer.hasPlayedBefore() && offlinePlayer.getName() != null) {
-                Tuple<UUID, String> tuple = new Tuple<>(offlinePlayer.getUniqueId(), offlinePlayer.getName());
-                plugin.getScheduler().runTask(() -> callback.accept(tuple));
-                dataManager.updateCachedUsernames(Collections.singletonMap(tuple.getFirst(), tuple.getSecond()));
                 return;
             }
 
@@ -142,7 +130,6 @@ public final class PointsUtils {
      * @param name The name of the player
      * @return a tuple of the player's UUID and name, or null if not found
      */
-    @SuppressWarnings("deprecation")
     public static Tuple<UUID, String> getPlayerByName(String name) {
         Player player = Bukkit.getPlayerExact(name);
         if (player != null)
@@ -151,10 +138,6 @@ public final class PointsUtils {
         UUID uuid = PlayerPoints.getInstance().getManager(DataManager.class).lookupCachedUUID(name);
         if (uuid != null)
             return new Tuple<>(uuid, name);
-
-        OfflinePlayer offlinePlayer = Bukkit.getOfflinePlayer(name);
-        if (offlinePlayer.hasPlayedBefore() && offlinePlayer.getName() != null)
-            return new Tuple<>(offlinePlayer.getUniqueId(), offlinePlayer.getName());
 
         return null;
     }
