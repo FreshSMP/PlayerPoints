@@ -163,7 +163,7 @@ public class DataManager extends AbstractDataManager implements Listener {
     private void updateAccountUUIDMaps() {
         Set<String> accountToNameMap = new HashSet<>();
         this.databaseConnector.connect(connection -> {
-            String accountUUIDMapQuery = "SELECT uuid, username FROM " + this.getTablePrefix() + "username_cache";
+            String accountUUIDMapQuery = "SELECT username FROM " + this.getTablePrefix() + "username_cache";
             try (Statement statement = connection.createStatement()) {
                 ResultSet result = statement.executeQuery(accountUUIDMapQuery);
                 while (result.next()) {
@@ -308,6 +308,7 @@ public class DataManager extends AbstractDataManager implements Listener {
     /**
      * Adds a pending transaction to offset the player's points by a specified amount
      *
+     * @param transactionType The type of transaction
      * @param playerId The Player to offset the points of
      * @param amount The amount to offset by
      * @return true if the transaction was successful, false otherwise
@@ -375,6 +376,8 @@ public class DataManager extends AbstractDataManager implements Listener {
                         default:
                             throw new IllegalStateException("Invalid transaction type");
                     }
+
+                    this.logTransaction(connection, uuid, transaction);
                 }
 
                 try (PreparedStatement statement = connection.prepareStatement(getQuery)) {
@@ -685,7 +688,6 @@ public class DataManager extends AbstractDataManager implements Listener {
     public List<Supplier<? extends DataMigration>> getDataMigrations() {
         return Arrays.asList(
                 _1_Create_Tables::new,
-                _2_Add_Table_Username_Cache::new,
                 _2_Add_Table_Username_Cache::new,
                 _3_Add_Table_Transaction_Log::new
         );
