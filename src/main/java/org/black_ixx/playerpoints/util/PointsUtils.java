@@ -6,6 +6,8 @@ import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
 import java.text.NumberFormat;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
@@ -17,11 +19,13 @@ import java.util.function.Consumer;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import org.black_ixx.playerpoints.PlayerPoints;
-import org.black_ixx.playerpoints.config.SettingKey;
 import org.black_ixx.playerpoints.manager.DataManager;
 import org.black_ixx.playerpoints.manager.LocaleManager;
 import org.black_ixx.playerpoints.models.Tuple;
 import org.bukkit.Bukkit;
+import org.bukkit.OfflinePlayer;
+import org.bukkit.command.CommandSender;
+import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.metadata.MetadataValue;
 
@@ -29,7 +33,8 @@ public final class PointsUtils {
 
     private static NumberFormat formatter = NumberFormat.getInstance();
     private static String decimal;
-    private static final NavigableMap<Long, String> suffixes = new TreeMap<>();
+    private static final NavigableMap<Long, String> SUFFIXES = new TreeMap<>();
+    private static final UUID CONSOLE_UUID = UUID.fromString("00000000-0000-0000-0000-000000000000");
 
     /**
      * Formats a number from 1100 to 1,100
@@ -66,7 +71,7 @@ public final class PointsUtils {
         if (points < 0) return "-" + formatPointsShorthand(-points);
         if (points < 1000) return Long.toString(points);
 
-        Map.Entry<Long, String> entry = suffixes.floorEntry(points);
+        Map.Entry<Long, String> entry = SUFFIXES.floorEntry(points);
         Long divideBy = entry.getKey();
         String suffix = entry.getValue();
 
@@ -90,10 +95,10 @@ public final class PointsUtils {
             formatter = null;
         }
 
-        suffixes.clear();
-        suffixes.put(1_000L, localeManager.getLocaleMessage("number-abbreviation-thousands"));
-        suffixes.put(1_000_000L, localeManager.getLocaleMessage("number-abbreviation-millions"));
-        suffixes.put(1_000_000_000L, localeManager.getLocaleMessage("number-abbreviation-billions"));
+        SUFFIXES.clear();
+        SUFFIXES.put(1_000L, localeManager.getLocaleMessage("number-abbreviation-thousands"));
+        SUFFIXES.put(1_000_000L, localeManager.getLocaleMessage("number-abbreviation-millions"));
+        SUFFIXES.put(1_000_000_000L, localeManager.getLocaleMessage("number-abbreviation-billions"));
         decimal = localeManager.getLocaleMessage("currency-decimal");
     }
 
@@ -111,11 +116,20 @@ public final class PointsUtils {
         }
 
         PlayerPoints plugin = PlayerPoints.getInstance();
+        DataManager dataManager = plugin.getManager(DataManager.class);
         plugin.getScheduler().runTaskAsync(() -> {
             UUID uuid = plugin.getManager(DataManager.class).lookupCachedUUID(name);
             if (uuid != null) {
                 Tuple<UUID, String> tuple = new Tuple<>(uuid, name);
                 plugin.getScheduler().runTask(() -> callback.accept(tuple));
+                return;
+            }
+
+            OfflinePlayer offlinePlayer = Bukkit.getOfflinePlayer(name);
+            if (offlinePlayer.getName() != null && offlinePlayer.hasPlayedBefore()) {
+                Tuple<UUID, String> tuple = new Tuple<>(offlinePlayer.getUniqueId(), offlinePlayer.getName());
+                plugin.getScheduler().runTask(() -> callback.accept(tuple));
+                dataManager.updateCachedUsernames(Collections.singletonMap(tuple.getFirst(), tuple.getSecond()));
                 return;
             }
 
@@ -132,48 +146,58 @@ public final class PointsUtils {
      */
     public static Tuple<UUID, String> getPlayerByName(String name) {
         Player player = Bukkit.getPlayerExact(name);
-        if (player != null)
+        if (player != null) {
             return new Tuple<>(player.getUniqueId(), player.getName());
+        }
+
+        OfflinePlayer offlinePlayer = Bukkit.getOfflinePlayer(name);
+        if (offlinePlayer.getName() != null && offlinePlayer.hasPlayedBefore()) {
+            return new Tuple<>(offlinePlayer.getUniqueId(), offlinePlayer.getName());
+        }
 
         UUID uuid = PlayerPoints.getInstance().getManager(DataManager.class).lookupCachedUUID(name);
-        if (uuid != null)
+        if (uuid != null) {
             return new Tuple<>(uuid, name);
+        }
 
         return null;
     }
 
     public static List<String> getPlayerTabCompleteWithoutSelf(CommandContext context) {
-        return getPlayerTabComplete(context, SettingKey.TAB_COMPLETE_SHOW_ALL_PLAYERS.get(), true);
+        return getPlayerTabComplete(context, true);
     }
 
     public static List<String> getPlayerTabComplete(CommandContext context) {
-        return getPlayerTabComplete(context, SettingKey.TAB_COMPLETE_SHOW_ALL_PLAYERS.get(), false);
+        return getPlayerTabComplete(context, false);
     }
 
     /**
      * @return a list of all accounts + online players excluding vanished players
      */
-    public static List<String> getPlayerTabComplete(CommandContext context, boolean showAllPlayers, boolean hideSelf) {
+    private static List<String> getPlayerTabComplete(CommandContext context, boolean hideSelf) {
         List<? extends Player> snapshot = new ArrayList<>(Bukkit.getOnlinePlayers());
 
         Set<String> usernames = snapshot.stream()
                 .filter(PointsUtils::isVisible)
                 .filter(p -> !hideSelf || !Objects.equals(p, context.getSender()))
                 .map(Player::getName)
-                .collect(Collectors.toSet());
+                .collect(Collectors.toCollection(HashSet::new));
 
-        if (showAllPlayers) {
-            usernames.addAll(context.getRosePlugin()
-                    .getManager(DataManager.class)
-                    .getAccountToNameMap()
-                    .values());
-        }
+        usernames.addAll(context.getRosePlugin().getManager(DataManager.class).getAllAccountNames());
 
         return new ArrayList<>(usernames);
     }
 
     public static boolean isVisible(Player player) {
         return player.getMetadata("vanished").stream().noneMatch(MetadataValue::asBoolean);
+    }
+
+    public static UUID getSenderUUID(CommandSender sender) {
+        if (sender instanceof Entity) {
+            return ((Entity) sender).getUniqueId();
+        } else {
+            return CONSOLE_UUID;
+        }
     }
 
 }
