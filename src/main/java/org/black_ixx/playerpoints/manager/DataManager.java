@@ -53,7 +53,6 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.AsyncPlayerPreLoginEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
-import org.jetbrains.annotations.NotNull;
 
 public class DataManager extends AbstractDataManager implements Listener {
 
@@ -62,7 +61,7 @@ public class DataManager extends AbstractDataManager implements Listener {
     private LoadingCache<UUID, Integer> pointsCache;
     private final Map<UUID, Deque<PendingTransaction>> pendingTransactions;
     private final Map<UUID, String> pendingUsernameUpdates;
-    private final Set<String> accountToNameMap;
+    private final Set<String> allAccountNames;
     private boolean isModernSqlite;
     private boolean logTransactions;
 
@@ -71,7 +70,7 @@ public class DataManager extends AbstractDataManager implements Listener {
 
         this.pendingTransactions = new ConcurrentHashMap<>();
         this.pendingUsernameUpdates = new ConcurrentHashMap<>();
-        this.accountToNameMap = Collections.newSetFromMap(new ConcurrentHashMap<>());
+        this.allAccountNames = Collections.newSetFromMap(new ConcurrentHashMap<>());
 
         Bukkit.getPluginManager().registerEvents(this, rosePlugin);
     }
@@ -83,19 +82,17 @@ public class DataManager extends AbstractDataManager implements Listener {
         this.pointsCache = CacheBuilder.newBuilder()
                 .concurrencyLevel(2)
                 .expireAfterAccess(5, TimeUnit.MINUTES)
-                .refreshAfterWrite(SettingKey.CACHE_DURATION.get(), TimeUnit.SECONDS)
+                .refreshAfterWrite(org.black_ixx.playerpoints.config.SettingKey.CACHE_DURATION.get(), TimeUnit.SECONDS)
                 .build(new CacheLoader<UUID, Integer>() {
                     @Override
-                    public @NotNull Integer load(@NotNull UUID uuid) {
+                    public Integer load(UUID uuid) {
                         return DataManager.this.getPoints(uuid);
                     }
                 });
 
         this.updateTask = this.rosePlugin.getScheduler().runTaskTimerAsync(this::update, 10L, 10L);
-
-        if (SettingKey.TAB_COMPLETE_SHOW_ALL_PLAYERS.get()) {
+        if (SettingKey.TAB_COMPLETE_SHOW_ALL_PLAYERS.get())
             this.accountUpdateTask = this.rosePlugin.getScheduler().runTaskTimerAsync(this::updateAccountUUIDMaps, 10L, org.black_ixx.playerpoints.config.SettingKey.CACHED_ACCOUNT_LIST_REFRESH_INTERVAL.get() * 20);
-        }
 
         if (this.databaseConnector instanceof SQLiteConnector) {
             this.databaseConnector.connect(connection -> {
@@ -136,7 +133,7 @@ public class DataManager extends AbstractDataManager implements Listener {
         this.pointsCache.invalidateAll();
         this.pendingTransactions.clear();
         this.pendingUsernameUpdates.clear();
-        this.accountToNameMap.clear();
+        this.allAccountNames.clear();
 
         super.disable();
     }
@@ -164,26 +161,25 @@ public class DataManager extends AbstractDataManager implements Listener {
     }
 
     private void updateAccountUUIDMaps() {
-        Set<String> accountToNameMap = new HashSet<>();
+        Set<String> allAccountNames = new HashSet<>();
         this.databaseConnector.connect(connection -> {
             String accountUUIDMapQuery = "SELECT username FROM " + this.getTablePrefix() + "username_cache";
             try (Statement statement = connection.createStatement()) {
                 ResultSet result = statement.executeQuery(accountUUIDMapQuery);
-                while (result.next()) {
-                    accountToNameMap.add(result.getString(1));
-                }
+                while (result.next())
+                    allAccountNames.add(result.getString(1));
             }
         });
 
-        this.accountToNameMap.clear();
-        this.accountToNameMap.addAll(accountToNameMap);
+        this.allAccountNames.clear();
+        this.allAccountNames.addAll(allAccountNames);
     }
 
     /**
      * @return a set of all account names registered by PlayerPoints, will be empty if tab-complete-show-all-players is false
      */
     public Set<String> getAllAccountNames() {
-        return this.accountToNameMap;
+        return this.allAccountNames;
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
@@ -196,7 +192,7 @@ public class DataManager extends AbstractDataManager implements Listener {
     public void onPlayerJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
         this.pendingUsernameUpdates.put(player.getUniqueId(), player.getName());
-        this.accountToNameMap.add(player.getName());
+        this.allAccountNames.add(player.getName());
     }
 
     /**
@@ -277,7 +273,7 @@ public class DataManager extends AbstractDataManager implements Listener {
         });
 
         if (generate.get()) {
-            int startingBalance = SettingKey.STARTING_BALANCE.get();
+            int startingBalance = org.black_ixx.playerpoints.config.SettingKey.STARTING_BALANCE.get();
             this.setPoints(TransactionType.SET, playerId, "Starting balance", null, startingBalance);
             value.set(startingBalance);
         }
@@ -300,9 +296,8 @@ public class DataManager extends AbstractDataManager implements Listener {
      * @return true if the transaction was successful, false otherwise
      */
     public boolean setPoints(TransactionType transactionType, UUID playerId, String sourceDescription, UUID source, int amount) {
-        if (amount < 0) {
+        if (amount < 0)
             return false;
-        }
 
         this.getPendingTransactions(playerId).add(new PendingTransaction(UpdateType.SET, transactionType, sourceDescription, source, amount));
         return true;
@@ -318,9 +313,8 @@ public class DataManager extends AbstractDataManager implements Listener {
      */
     public boolean offsetPoints(TransactionType transactionType, UUID playerId, String sourceDescription, UUID source, int amount) {
         int points = this.getEffectivePoints(playerId);
-        if (points + amount < 0) {
+        if (points + amount < 0)
             return false;
-        }
 
         this.getPendingTransactions(playerId).add(new PendingTransaction(UpdateType.OFFSET, transactionType, sourceDescription, source, amount));
         return true;
@@ -394,7 +388,7 @@ public class DataManager extends AbstractDataManager implements Listener {
                 }
 
                 // Send update to BungeeCord if enabled
-                if (SettingKey.BUNGEECORD_SEND_UPDATES.get() && this.rosePlugin.isEnabled()) {
+                if (org.black_ixx.playerpoints.config.SettingKey.BUNGEECORD_SEND_UPDATES.get() && this.rosePlugin.isEnabled()) {
                     ByteArrayDataOutput output = ByteStreams.newDataOutput();
                     output.writeUTF("Forward");
                     output.writeUTF("ONLINE");
@@ -463,7 +457,7 @@ public class DataManager extends AbstractDataManager implements Listener {
                     int pointsValue = this.getEffectivePoints(uuid, result.getInt(3));
 
                     if (username != null) {
-                        if (SettingKey.SHOW_NON_PLAYER_ACCOUNTS_ON_LEADERBOARDS.get()) {
+                        if (org.black_ixx.playerpoints.config.SettingKey.SHOW_NON_PLAYER_ACCOUNTS_ON_LEADERBOARDS.get()) {
                             players.add(new SortedPlayer(uuid, username, pointsValue));
                         } else {
                             if (!username.startsWith("*")) {
@@ -522,15 +516,17 @@ public class DataManager extends AbstractDataManager implements Listener {
 
         UUID uuid = UUID.randomUUID();
         this.pendingUsernameUpdates.put(uuid, accountName);
-        int startingBalance = SettingKey.STARTING_BALANCE.get();
+        int startingBalance = org.black_ixx.playerpoints.config.SettingKey.STARTING_BALANCE.get();
         this.setPoints(TransactionType.SET, uuid, "Starting balance", null, startingBalance);
-        this.accountToNameMap.add(accountName);
+        this.allAccountNames.add(accountName);
         return uuid;
     }
 
     public void deleteAccount(UUID accountID) {
         this.pointsCache.invalidate(accountID);
         this.pendingTransactions.remove(accountID);
+
+        String username = this.lookupCachedUsername(accountID);
 
         this.databaseConnector.connect(connection -> {
             String usernameDeleteQuery = "DELETE FROM " + this.getPointsTableName() + " WHERE " + this.getUuidColumnName() + " = ?";
@@ -545,7 +541,7 @@ public class DataManager extends AbstractDataManager implements Listener {
             }
         });
 
-        this.accountToNameMap.remove(accountID);
+        this.allAccountNames.remove(username);
     }
 
     public void importData(Map<UUID, Integer> data, Map<UUID, String> cachedUsernames) {
@@ -697,15 +693,15 @@ public class DataManager extends AbstractDataManager implements Listener {
     }
 
     private String getPointsTableName() {
-        if (SettingKey.LEGACY_DATABASE_MODE.get()) {
-            return SettingKey.LEGACY_DATABASE_NAME.get();
+        if (org.black_ixx.playerpoints.config.SettingKey.LEGACY_DATABASE_MODE.get()) {
+            return org.black_ixx.playerpoints.config.SettingKey.LEGACY_DATABASE_NAME.get();
         } else {
             return super.getTablePrefix() + "points";
         }
     }
 
     private String getUuidColumnName() {
-        if (SettingKey.LEGACY_DATABASE_MODE.get()) {
+        if (org.black_ixx.playerpoints.config.SettingKey.LEGACY_DATABASE_MODE.get()) {
             return "playername";
         } else {
             return "uuid";

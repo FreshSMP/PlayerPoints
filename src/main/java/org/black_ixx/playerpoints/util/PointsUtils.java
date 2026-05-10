@@ -108,6 +108,7 @@ public final class PointsUtils {
      * @param name The name of the player
      * @param callback A callback to run with a tuple of the player's UUID and name, or null if not found
      */
+    @SuppressWarnings("deprecation")
     public static void getPlayerByName(String name, Consumer<Tuple<UUID, String>> callback) {
         Player player = Bukkit.getPlayerExact(name);
         if (player != null) {
@@ -125,12 +126,14 @@ public final class PointsUtils {
                 return;
             }
 
-            OfflinePlayer offlinePlayer = Bukkit.getOfflinePlayer(name);
-            if (offlinePlayer.getName() != null && offlinePlayer.hasPlayedBefore()) {
-                Tuple<UUID, String> tuple = new Tuple<>(offlinePlayer.getUniqueId(), offlinePlayer.getName());
-                plugin.getScheduler().runTask(() -> callback.accept(tuple));
-                dataManager.updateCachedUsernames(Collections.singletonMap(tuple.getFirst(), tuple.getSecond()));
-                return;
+            if (!name.startsWith("*")) {
+                OfflinePlayer offlinePlayer = Bukkit.getOfflinePlayer(name);
+                if (offlinePlayer.getName() != null && offlinePlayer.hasPlayedBefore()) {
+                    Tuple<UUID, String> tuple = new Tuple<>(offlinePlayer.getUniqueId(), offlinePlayer.getName());
+                    plugin.getScheduler().runTask(() -> callback.accept(tuple));
+                    dataManager.updateCachedUsernames(Collections.singletonMap(tuple.getFirst(), tuple.getSecond()));
+                    return;
+                }
             }
 
             plugin.getScheduler().runTask(() -> callback.accept(null));
@@ -146,19 +149,18 @@ public final class PointsUtils {
      */
     public static Tuple<UUID, String> getPlayerByName(String name) {
         Player player = Bukkit.getPlayerExact(name);
-        if (player != null) {
+        if (player != null)
             return new Tuple<>(player.getUniqueId(), player.getName());
-        }
 
-        OfflinePlayer offlinePlayer = Bukkit.getOfflinePlayer(name);
-        if (offlinePlayer.getName() != null && offlinePlayer.hasPlayedBefore()) {
-            return new Tuple<>(offlinePlayer.getUniqueId(), offlinePlayer.getName());
+        if (!name.startsWith("*")) {
+            OfflinePlayer offlinePlayer = Bukkit.getOfflinePlayer(name);
+            if (offlinePlayer.getName() != null && offlinePlayer.hasPlayedBefore())
+                return new Tuple<>(offlinePlayer.getUniqueId(), offlinePlayer.getName());
         }
 
         UUID uuid = PlayerPoints.getInstance().getManager(DataManager.class).lookupCachedUUID(name);
-        if (uuid != null) {
+        if (uuid != null)
             return new Tuple<>(uuid, name);
-        }
 
         return null;
     }
